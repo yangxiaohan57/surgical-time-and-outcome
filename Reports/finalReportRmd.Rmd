@@ -1,0 +1,247 @@
+---
+title: <center><h1>Association between Surgery Time and Outcome</h1></center>
+author: <center><h3>Xiaohan Yang</h3></center>
+date: <center><h4>11/22/2020</h4></center>
+output:
+  html_document:
+    highlight: pygments
+    theme: spacelab
+  fontsize: 12pt
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(ggplot2)
+library(rms) # vif
+library(pander)
+library(mice) # imputation
+library(lattice) # density plot
+library(arm) #binnedplot
+library(caret) #confusion matrix
+library(kableExtra)
+library(pROC) # ROC curve
+```
+
+```{r}
+simpu <- read.csv('cleaned_surgery.csv', sep=',', header=TRUE)
+simpu <- subset(simpu, select=c(2:26))
+cols <- c('ahrq_ccs','gender','race','asa_status','baseline_cancer','baseline_cvd','baseline_dementia','baseline_diabetes','baseline_digestive','baseline_osteoart','baseline_psych','baseline_pulmonary','baseline_charlson','dow', 'month','moonphase', 'mort30','complication')
+simpu[cols] <- lapply(simpu[cols], factor)
+
+simpu$hour_group[simpu$hour<12] = "AM"
+simpu$hour_group[simpu$hour>=12] = "PM"
+simpu$hour_group <- factor(simpu$hour_group)
+
+simpu$comprsi_group[simpu$complication_rsi<0] = 0
+simpu$comprsi_group[simpu$complication_rsi>=0] = 1
+simpu$comprsi_group <- factor(simpu$comprsi_group)
+```
+
+
+
+* * *
+### Summary
+
+This project is primarily interested in exploring if surgery time factors (ie. surgery hour, day of the week, month, etc.) have an association with mortality within 30 days after surgery. A subordinate interest of this project is to explore if there are other factors associated with 30-day mortality. The original dataset contains 32,001 observations and 25 rows. The methodology is logistic regression. The conclusion is that the surgery scheduled month and hour of a day have an association with surgery outcome. 
+
+### Introduction
+
+It has been proven by many studies that working performance is largely affected by human factors, such as fatigue, scheduling, or the inadequacy of sleep. People tend to be exhausted by shift work and prolonged duty and hence become more error-prone. The scheduled worktime plays an important role in working effectiveness. There is no reason to assume that hospital personnel is immune to such performance degradation. This project investigates if the time factors of general surgery (increasing hour of a day, increasing day of a week, middle of the year versus other months, and moon phase) are independently related to 30-day mortality using the logistic regression model. Meanwhile, this project also explores if other factors (patient's demographics, baseline diseases, surgical risk indices) influence 30-day mortality. 
+
+### Data
+
+This dataset comes from a 2011 study and contains 32,001 observations and 25 columns. Each observation represents a general surgery patient at the Cleveland Clinic between January 2005 and September 2010. This dataset consists only of general surgeries scheduled at routine workdays and workweeks and does not include emergency surgeries. 
+
+The response variable is the binary indicator of 30-day mortality. The other 24 predictors can be grouped into 4 categories: 1) surgical time predictors (hour, day of week, month, and moon phase). 2) patients demographic predictors (age, gender, race, BMI). 3) binary indicators of 8 baseline diseases. 4) surgical risk indices (asa_status, baseline_charlson, complication_rsi, etc.). Amongst all predictors, age, BMI, hour, mortality_rsi, and complication_rsi are continuous numerical variables. All the rest of the variables are categorical.
+
+It is worth noticing that this dataset has missing values in 4 columns. Column gender has 3 missing cells; race has 480; asa_status has 8; BMI has 3290. There are about 10% of the observations have missing values, so the issue is not too serious. I applied the multiple imputation strategy (mice, set m=10) on the entire dataset, and randomly selected one of the completed datasets, and ran the diagnostics (Appendix A). The imputation is reasonable and is of high quality. I will use the imputed dataset for the rest of the analysis.
+
+### EDA
+
+To begin with, I checked the distribution for all numerical variables. Complication_rsi, mortality_rsi, and hour are not normally distributed (Appendix B). Complication_rsi and mortality_rsi are risk indices for in-hospital complication and death and have values less than 0. It is difficult to do log or square transformation on such variables, so I categorized them using 0 as a threshold. The other variable hour represents the hour of a day, so it does not make much sense to make it numerical. I also categorized it into 2 levels: "AM" and "PM", using 12 pm as a threshold.
+
+After binning the three variables just mentioned, the remaining numerical variables do not show a correlation with 30-day mortality in boxplots. Moving on to EDA for categorical predictors, I first explore the distributions of surgical time predictors because they are the key interest of this project. The conditional probability for 30-day death is slightly different across months (Appendix D). I suspect that there is a relationship between the two. Yet the p-value in chi-squared test for month is not significant, which says these two variables are independent. Despite the result of the chi-squared test, we should put the variable month in our model later, because it is one of the factors we are most interested in.
+
+As for other categorical predictors, gender, asa_status (American Society of Anesthesiologist Physical Status), baseline_charlson (Charlson Comorbidity Index) also demonstrated strong correlations with 30-day mortality, and they all have significant p-values in chi-squared test. Additionally, whether a patient has baseline cancer, cardiovascular or pulmonary diseases also seem to be correlated to 30-day death, which makes sense because these diseases are relatively more fatal.
+
+#### Multicolinearity
+
+Then I explored variable multicollinearity. Inferring from domain knowledge, I think there might be a multicollinearity issue between age and baseline diseases, since some diseases are more likely to occur among senior people. I investigated the multicollinearity between age and most other predictors and found the distribution of age vs baseline_cvd are different between the dead group and survived group (Appendix E). We may want to explore this interaction more, later in the model. 
+
+To sum up, the EDA suggests that gender, mortality_rsi, complication_rsi, month, asa_status, baseline_charlson, baseline_cancer, baseline_cvd, baseline_pulmonary should have relationships with 30-day mortality. The interaction between age and baseline_cvd should also be worth exploring. We should consider include these variables in the model later.
+
+
+### Model
+
+I first decided to use a stepwise selection process to find a preliminary model. The null model only includes the null predictor 1, and the full model includes all predictors plus interaction terms age:baseline_cvd. Since there are a lot of variables in the original dataset, I choose AIC instead of BIC because it tends to keep more variables. 
+
+The AIC model selects 6 predictors - gender, hour, baseline_osteoart, and 3 surgical risk indices, yet excludes the interaction terms (See Appendix F). The AIC model is mostly consistent with the findings in EDA, so I decided to construct a final model based on the AIC model.
+
+The AIC model does not include month, baseline_cancer, baseline_cvd, baseline_pulmonary, and age:baseline_cvd, which we found worth exploring in the EDA. I added these predictors into the model one at a time and applied F-test to test the significance. It turns out that only adding month improves the AIC model, so I decided to include month in the model.
+
+For the surgical time predictors, the AIC model excludes day of week and moon phase. I tested if adding these two predictors would improve the model. However, the F-test shows adding day of week or moon phase would not make much difference to the model. 
+
+Likewise, the interaction term we found interesting in EDA does not improve the model. I also tried 6 other potential interaction terms, but none of them significantly improves the model, which means that my final model would not include any interaction terms.
+
+As the result, the final model has 7 predictors, and the model summary is as follow:
+
+$$logit(\pi_{i}) = \beta_0 + \beta_1 x_{gender} + \beta_2 x_{asa\_status} + \beta_3 x_{baseline\_osteoart} + \beta_4 x_{baseline\_charlson} + \beta_5 x_{comprsi\_group} + \beta_6 x_{month} + \beta_7 x_{hour\_group}$$
+```{r}
+final <- glm(mort30~gender+asa_status+baseline_osteoart+baseline_charlson+comprsi_group+ month+hour_group,family=binomial(link=logit),data=simpu)
+```
+
+
+
+```{r}
+#pander(summary(final))
+```
+
+![](final.png){height=85%, width=85%}
+
+
+#### Model Interpretation
+
+Month: Holding everything else constant, comparing to surgical patients in January, a patient who is operated in August is 66% less likely to die in 30 days; a patient operated in October is 61% less likely to die; a patient in November is 71% less likely to die; patient in December is also 71% less likely to die.
+
+Hour of day (binned): Holding everything else constant, comparing to surgical patients operated in the morning, patients operated in the afternoon are 43% more likely to die. 
+
+Gender: Holding everything else constant, comparing to male patients, female patients are 33% less likely to die within 30 days of the surgery. 
+
+Baseline_osteoart: Holding everything else constant, comparing to patients without osteoarthritis as their baseline disease, patients with osteoarthritis are 22% more likely to die within 30 days of the surgery.
+
+Besides these predictors, three surgical risk indices are also significant, including asa_status (American Society of Anesthesiologist Physical Status), baseline_charlson (Charlson Comorbidity Index), comprsi_group1 (binned in-hospital complication risk). Generally speaking, the higher level of risk a patient has, the more likely he/she dies within 30 days of the surgery.
+
+#### Model Diagnostics 
+
+For model diagnostics, I first drew a binned residual plot. It looks mostly good. Most of the points fall within the 95% bin, and are roughly random, which says that the observations are independent.
+
+```{r}
+resid <- residuals(final,"resp")
+binnedplot(x=fitted(final),y=resid,xlab="Pred. probabilities",
+           col.int="red4",ylab="Avg. residuals",main="Binned residual plot",col.pts="navy")
+```
+
+VIF scores were also checked for the final model (Appendix G). All variables have VIF scores around 1, so there is no multicollinearity issue.
+
+Moving on to the confusion matrix, I used the mean of 30-day mortality as the threshold. The sensitivity and specificity scores are both high. The model also has a decent accuracy score. The model does well on both fitting the data and predicting.
+
+```{r}
+Conf_mat <- confusionMatrix(as.factor(ifelse(fitted(final) >= mean(as.numeric(simpu$mort30)-1), "Yes","No")),
+                            as.factor(simpu$mort30),positive = "Yes")
+cmatrix <- Conf_mat$table
+kable(cmatrix, digits=2, caption = "Confusion Matrix")  %>%
+   add_header_above(
+       header = c("Predicted"=1, "Observed" = 2)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+df2 <- data.frame("Accuracy"=0.84, "Sensitivity"=0.81, "Specificity"=0.84)
+kable(df2, digits=2, caption = "Confusion Matrix Statistics") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+Moreover, the ROC plot is shown below. The AUC score is 0.89, which is pretty close to 1.
+
+![](combine.png){height=90%, width=90%}
+
+
+```{r include=FALSE}
+invisible(roc(simpu$mort30,fitted(final),plot=T,print.thres="best",legacy.axes=T,print.auc =T,col="red3"))
+```
+
+I then checked outliers. The largest cook's distance value is around 0.02 -- still inside the 95% bin. The binned residual plot also confirms that there is no serious outlier issue. Hence, I decide not to remove any points.
+
+```{r include=FALSE}
+n <- nrow(model.matrix(final)); p <- ncol(model.matrix(final))
+lev_scores <- hatvalues(final) 
+plot(final,which=4,col=c("blue4"))
+```
+
+In a word, all the model diagnostics show that the final model fit the data well and does a decent job in prediction. There is also no serious outlier issue.
+
+
+### Conclusion
+
+There is enough evidence that 30-day mortality is associated with the month a surgery takes place, and with whether the surgery is scheduled in AM or PM. General surgical patients have a significantly less likelihood of 30-day death in August, October, November, and December. Patients have more likelihood of 30-day death if they are operated in the afternoon. From this result, we can infer that hospital personnel might be less effective in the afternoon. 
+
+On the other hand, no association was found for day of week or moon phase and 30-day mortality. These two factors are not statistically significant at a 0.1 level.
+
+Other factors that associate with mortality in 30 days include gender, baseline osteoarthritis, and surgical risks.  
+
+Lastly, there is a potential limitation of this analysis. The observations in this dataset are selected only from scheduled general surgeries that happen on routine workday and workweek. The dataset does not include emergency surgeries, which are more likely to happen late at night or on weekends. The latest operation hour in this dataset is only 7 pm. During late nights and weekends, it is likely the hospital staff are more easily affected by fatigue. Since the dataset does not include all types of surgeries in the hospital, our conclusion might be very biased. 
+
+
+* * *
+
+\newpage
+
+### Appendix 
+
+#### Appendix A: Imputation results
+
+```{r}
+#densityplot(surgery_impu)
+```
+
+![appenA](appenA.png){height=60%, width=60%}
+
+
+#### Appendix B: Distribution of complication_rsi and hour
+
+```{r}
+hist(simpu$complication_rsi)
+hist(simpu$mortality_rsi)
+hist(simpu$hour)
+```
+
+
+#### Appendix C: Boxplots of mortality_rsi, complication_rsi vs 30-day mortality
+
+```{r}
+ggplot(simpu,aes(x=mortality_rsi, y=mort30, fill=mort30)) + geom_boxplot() + coord_flip() + 
+  labs(title="mortality_rsi vs 30 days mortality",x="mortality_rsi",y="mortality") + theme_classic()  +
+  scale_y_discrete() + scale_fill_brewer(palette="Blues")
+        # dead people have higher risk value
+
+ggplot(simpu,aes(x=complication_rsi, y=mort30, fill=mort30)) + geom_boxplot() + coord_flip() + 
+  labs(title="complication_rsi vs 30 days mortality",x="complication_rsi",y="mortality") + theme_classic()+
+  scale_y_discrete() + scale_fill_brewer(palette="Blues")
+        # dead people have higher complication risk value
+```
+
+
+#### Appendix D: Conditional Probability Across Month
+
+```{r}
+table_month <- apply(table(simpu[,c("mort30","month")])/sum(table(simpu[,c("mort30","month")])),2,function(x) x/sum(x))
+pander(table_month)
+```
+
+#### Appendix E: Interaction between age and basline_cvd
+
+```{r}
+ggplot(simpu,aes(x=baseline_cvd, y=age, fill=baseline_cvd)) +
+  geom_boxplot() + scale_fill_brewer(palette="Reds") + 
+  labs(title="baseline_cvd vs age",x="baseline_cvd",y="age") + theme_classic()+ scale_y_discrete() + facet_wrap(~mort30)
+```
+
+
+#### Appendix F: Summary of AIC Model
+
+```{r}
+mod_full <- glm(mort30~ahrq_ccs+age+gender+race+asa_status+bmi+baseline_cancer+baseline_cvd+baseline_dementia+baseline_diabetes+baseline_digestive+baseline_osteoart+baseline_psych+baseline_pulmonary+baseline_charlson+mortality_rsi+complication_rsi+hour+dow+month+moonphase+age:baseline_cvd,
+                family=binomial(link=logit),data=simpu)
+mod_null <- glm(mort30~1,family=binomial(link=logit),data=simpu)
+Model_stepwise <- step(mod_null,scope=formula(mod_full),
+                       direction="both",trace=0)
+pander(summary(Model_stepwise))
+```
+
+#### Appendix G: VIF for Final Model
+
+```{r}
+pander(vif(final))
+```
+
+
+* * *

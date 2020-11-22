@@ -1,6 +1,7 @@
 ##### Libraries #####
 library(ggplot2)
-
+library(rms) # vif
+library(broom) #confusion matrix
 
 ##### Read in the dataset #####
 load("~/Desktop/702/Final/surgery_timing.Rdata")
@@ -71,58 +72,90 @@ ggplot(surgery,aes(x=complication_rsi, y=mort30, fill=mort30)) + geom_boxplot() 
         # dead people have higher complication risk value
 
 ggplot(surgery,aes(x=hour, y=mort30, fill=mort30)) + geom_boxplot() + coord_flip() + 
-  labs(title="hour vs 30 days mortality",x="complication_rsi",y="mortality") + theme_classic()+
+  labs(title="hour vs 30 days mortality",x="hour",y="mortality") + theme_classic()+
   scale_y_discrete() + scale_fill_brewer(palette="Blues")
         # dead people are operated at later hours
+
 
 # For Categorical var
 
 apply(table(surgery[,c("mort30","gender")])/sum(table(surgery[,c("mort30","gender")])),
       2,function(x) x/sum(x)) 
+chisq.test(table(simpu[,c("mort30","gender")]), simulate.p.value=TRUE) # *
+
 
 apply(table(surgery[,c("mort30","race")])/sum(table(surgery[,c("mort30","race")])),
       2,function(x) x/sum(x)) 
+chisq.test(table(simpu[,c("mort30","race")]), simulate.p.value=TRUE)
+
 
 apply(table(surgery[,c("mort30","asa_status")])/sum(table(surgery[,c("mort30","asa_status")])),
       2,function(x) x/sum(x)) 
+chisq.test(table(simpu[,c("mort30","asa_status")]), simulate.p.value=TRUE) # *
+
 
 apply(table(surgery[,c("mort30","baseline_cancer")])/sum(table(surgery[,c("mort30","baseline_cancer")])),
       2,function(x) x/sum(x)) 
+chisq.test(table(simpu[,c("mort30","baseline_cancer")]), simulate.p.value=TRUE) # *
+
 
 apply(table(surgery[,c("mort30","baseline_cvd")])/sum(table(surgery[,c("mort30","baseline_cvd")])),
       2,function(x) x/sum(x)) 
+chisq.test(table(simpu[,c("mort30","baseline_cvd")]), simulate.p.value=TRUE) # *
+
 
 apply(table(surgery[,c("mort30","baseline_dementia")])/sum(table(surgery[,c("mort30","baseline_dementia")])),
       2,function(x) x/sum(x)) # seems highly correlated but might because of age
+chisq.test(table(simpu[,c("mort30","baseline_dementia")]), simulate.p.value=TRUE)
+
 
 apply(table(surgery[,c("mort30","baseline_diabetes")])/sum(table(surgery[,c("mort30","baseline_diabetes")])),
       2,function(x) x/sum(x)) 
+chisq.test(table(simpu[,c("mort30","baseline_diabetes")]), simulate.p.value=TRUE)
+
 
 apply(table(surgery[,c("mort30","baseline_digestive")])/sum(table(surgery[,c("mort30","baseline_digestive")])),
       2,function(x) x/sum(x)) 
+chisq.test(table(simpu[,c("mort30","baseline_digestive")]), simulate.p.value=TRUE)
+
 
 apply(table(surgery[,c("mort30","baseline_osteoart")])/sum(table(surgery[,c("mort30","baseline_osteoart")])),
       2,function(x) x/sum(x)) # seems highly correlated but might because of age
+chisq.test(table(simpu[,c("mort30","baseline_osteoart")]), simulate.p.value=TRUE)
+
 
 apply(table(surgery[,c("mort30","baseline_psych")])/sum(table(surgery[,c("mort30","baseline_psych")])),
       2,function(x) x/sum(x)) # associated
+chisq.test(table(simpu[,c("mort30","baseline_psych")]), simulate.p.value=TRUE) # *
+
 
 apply(table(surgery[,c("mort30","baseline_pulmonary")])/sum(table(surgery[,c("mort30","baseline_pulmonary")])),
       2,function(x) x/sum(x)) #associated
+chisq.test(table(simpu[,c("mort30","baseline_pulmonary")]), simulate.p.value=TRUE) #*
+
 
 apply(table(surgery[,c("mort30","baseline_charlson")])/sum(table(surgery[,c("mort30","baseline_charlson")])),
       2,function(x) x/sum(x)) # associated
+chisq.test(table(simpu[,c("mort30","baseline_charlson")]), simulate.p.value=TRUE) #*
+
 
 apply(table(surgery[,c("mort30","baseline_charlson")])/sum(table(surgery[,c("mort30","baseline_charlson")])),
       2,function(x) x/sum(x))
+chisq.test(table(simpu[,c("mort30","baseline_dementia")]), simulate.p.value=TRUE)
+
 
 apply(table(surgery[,c("mort30","dow")])/sum(table(surgery[,c("mort30","dow")])),2,function(x) x/sum(x))
       # wed, fri较高 其他差不多
+chisq.test(table(simpu[,c("mort30","dow")]), simulate.p.value=TRUE)
+
 
 apply(table(surgery[,c("mort30","month")])/sum(table(surgery[,c("mort30","month")])),2,function(x) x/sum(x))
       # seasonal 一二七月最高
+chisq.test(table(simpu[,c("mort30","month")]), simulate.p.value=TRUE)
+
 
 apply(table(surgery[,c("mort30","moonphase")])/sum(table(surgery[,c("mort30","moonphase")])),2,function(x) x/sum(x))
+chisq.test(table(simpu[,c("mort30","moonphase")]), simulate.p.value=TRUE)
 
 
 
@@ -203,9 +236,9 @@ ggplot(simpu,aes(x=asa_status, y=age, fill=asa_status)) + geom_boxplot() +
   labs(title="asa_status vs age",x="asa_status",y="age") + theme_classic()+
   scale_y_discrete() + facet_wrap(~mort30)
 
-ggplot(simpu,aes(x=baseline_psych, y=age, fill=baseline_psych)) + geom_boxplot() +
+ggplot(simpu,aes(x=baseline_psych, y=age, fill=baseline_cvd)) + geom_boxplot() +
   scale_fill_brewer(palette="Reds") + 
-  labs(title="baseline_psych vs age",x="baseline_psych",y="age") + theme_classic()+
+  labs(title="baseline_cvd vs age",x="baseline_cvd",y="age") + theme_classic()+
   scale_y_discrete() + facet_wrap(~mort30) # 死人里没有psych的年纪要大一些？？
 
 ggplot(simpu,aes(x=baseline_charlson, y=age, fill=baseline_charlson)) + geom_boxplot() +
@@ -239,8 +272,180 @@ baseline$baseline_pulmonary <- as.integer(baseline$baseline_pulmonary) -1
 baseline_sum <- rowSums(baseline)
 table(baseline_sum)
 
+write.csv(simpu,
+          "/Users/xiaohan/Desktop/702/Final/cleaned_surgery.csv", 
+          row.names = TRUE)
 
 
+
+
+##### Modeling #####
+
+mod_full <- glm(mort30~ahrq_ccs+age+gender+race+asa_status+bmi+baseline_cancer+baseline_cvd
+                +baseline_dementia+baseline_diabetes+baseline_digestive+baseline_osteoart+
+                  baseline_psych+baseline_pulmonary+baseline_charlson+mortality_rsi+
+                  complication_rsi+hour+dow+month+moonphase+age:baseline_cvd,
+                family=binomial(link=logit),data=simpu)
+summary(mod_full)
+
+
+# AIC
+mod_null <- glm(mort30~1,family=binomial(link=logit),data=simpu)
+Model_stepwise <- step(mod_null, scope = formula(mod_full),direction="both",trace=0)
+summary(Model_stepwise)
+
+# backward
+mod_backward <- step(mod_full, scope=formula(mod_full),direction="backward",trace=0)
+summary(mod_backward)
+
+# EDA SUGGESTED MODEL
+mod_eda <- glm(mort30~age+asa_status+baseline_dementia+baseline_osteoart+
+                 baseline_psych+baseline_pulmonary+baseline_charlson+mortality_rsi+
+                 complication_rsi+hour+dow+month,family=binomial(link=logit),data=simpu)
+summary(mod_eda)
+
+# gender,asa_status,charlson,baseline_osteoart,complication_rsi,hour,dow,month
+
+mod_null_time <- glm(mort30~hour+dow+month,family=binomial(link=logit),data=simpu)
+Model_stepwise2 <- step(mod_null_time, scope = formula(mod_full),direction="both",trace=0)
+summary(Model_stepwise2)
+
+# self selected model 
+mod_selfselect <- glm(mort30~gender+asa_status+baseline_osteoart+baseline_charlson+
+                        complication_rsi+month,
+                      family=binomial(link=logit),data=simpu)
+summary(mod_selfselect)
+
+
+
+# anova
+
+###test if AIC model is better than full
+anova(Model_stepwise, mod_full, test= "Chisq")
+      # full model is no better at 0.05 level
+
+###test if self select if better than full
+anova(mod_selfselect, mod_full, test= "Chisq")
+      # full model is no better at 0.05 level
+
+### test if adding hour/dow/age improves the model
+mod_selfselect_hour <- glm(mort30~gender+asa_status+baseline_osteoart+baseline_charlson+
+                             complication_rsi+month+hour,
+                           family=binomial(link=logit),data=simpu)
+anova(mod_selfselect,mod_selfselect_hour,test= "Chisq")
+        # adding hour makes no improvement
+
+mod_selfselect_dow <- glm(mort30~gender+asa_status+baseline_osteoart+baseline_charlson+
+                             complication_rsi+month+dow,
+                           family=binomial(link=logit),data=simpu)
+anova(mod_selfselect,mod_selfselect_dow,test= "Chisq")
+        # adding dow makes no improvement
+
+mod_selfselect_age <- glm(mort30~gender+asa_status+baseline_osteoart+baseline_charlson+
+                            complication_rsi+month+age,
+                          family=binomial(link=logit),data=simpu)
+anova(mod_selfselect,mod_selfselect_age,test= "Chisq")
+        # adding age makes no improvement
+
+mod_selfselect_cancer <- glm(mort30~gender+asa_status+baseline_osteoart+baseline_charlson+
+                            complication_rsi+month+baseline_cancer,
+                          family=binomial(link=logit),data=simpu)
+anova(mod_selfselect,mod_selfselect_cancer,test= "Chisq")
+        # adding cancer makes no improvement
+
+mod_selfselect_cvd <- glm(mort30~gender+asa_status+baseline_osteoart+baseline_charlson+
+                               complication_rsi+month+baseline_cvd,
+                             family=binomial(link=logit),data=simpu)
+anova(mod_selfselect,mod_selfselect_cvd,test= "Chisq")
+        # adding cancer makes no improvement
+
+mod_selfselect_pulmonary <- glm(mort30~gender+asa_status+baseline_osteoart+baseline_charlson+
+                            complication_rsi+month+baseline_pulmonary,
+                          family=binomial(link=logit),data=simpu)
+anova(mod_selfselect,mod_selfselect_pulmonary,test= "Chisq")
+        # adding cancer makes no improvement
+
+#age:baseline_cvd
+mod_selfselect_inter <- glm(mort30~gender+asa_status+baseline_osteoart+baseline_charlson+
+                                  complication_rsi+month+age*baseline_cvd,
+                                family=binomial(link=logit),data=simpu)
+anova(mod_selfselect,mod_selfselect_inter,test= "Chisq")
+        # adding interaction makes no improvement
+
+
+
+
+
+
+### test if dropping month improves the model
+model_selfselect_dropmonth <- glm(mort30~gender+asa_status+baseline_osteoart+baseline_charlson+
+                                    complication_rsi,
+                                  family=binomial(link=logit),data=simpu)
+anova(mod_selfselect,model_selfselect_dropmonth,test= "Chisq")
+
+### test if dropping osteo improves the model
+model_selfselect_droposteo <- glm(mort30~gender+asa_status+baseline_charlson+
+                                    complication_rsi+month,
+                                  family=binomial(link=logit),data=simpu)
+anova(mod_selfselect,model_selfselect_droposteo,test= "Chisq") ## Improves !!
+
+# multicolinearity
+
+### baseline_osteoart vs age
+mod_ageosteoart <- glm(mort30~gender+asa_status+baseline_osteoart+baseline_charlson+
+                              complication_rsi+month+age+baseline_osteoart:age,
+                             family=binomial(link=logit),data=simpu)
+summary(mod_ageosteoart)
+anova(mod_selfselect_age,mod_ageosteoart,test= "Chisq")
+# no improvement
+
+
+### asa_status vs age
+mod_ageasa <- glm(mort30~gender+asa_status+baseline_osteoart+baseline_charlson+
+                         complication_rsi+month+age+asa_status:age,
+                       family=binomial(link=logit),data=simpu)
+anova(mod_selfselect_age,mod_ageasa,test= "Chisq")
+
+
+mod_selfselect <- glm(mort30~gender+asa_status+baseline_osteoart+baseline_charlson+
+                        complication_rsi+month+hour,
+                      family=binomial(link=logit),data=simpu)
+summary(mod_selfselect)
+
+
+vif(mod_selfselect)
+
+
+######## Address issue ########
+
+simpu$hour_group[simpu$hour<12] = "AM"
+simpu$hour_group[simpu$hour>=12] = "PM"
+simpu$hour_group <- factor(simpu$hour_group)
+
+simpu$comprsi_group[simpu$complication_rsi<0] = 0
+simpu$comprsi_group[simpu$complication_rsi>=0] = 1
+simpu$comprsi_group <- factor(simpu$comprsi_group)
+
+
+final <- glm(mort30~gender+asa_status+baseline_osteoart+baseline_charlson+comprsi_group+
+               month+hour_group,family=binomial(link=logit),data=simpu)
+summary(final)
+
+resid <- residuals(final,"resp")
+binnedplot(x=fitted(final),y=resid,xlab="Pred. probabilities",
+           col.int="red4",ylab="Avg. residuals",main="Binned residual plot",col.pts="navy")
+
+
+Conf_mat <- confusionMatrix(as.factor(ifelse(fitted(final) >= mean(as.numeric(simpu$mort30)-1), "Yes","No")),
+                            as.factor(simpu$mort30),positive = "Yes")
+Conf_mat$table
+Conf_mat$overall["Accuracy"]
+Conf_mat$byClass[c("Sensitivity","Specificity")] 
+
+
+df2 <- data.frame("Accuracy"=0.61, "Sensitivity"=0.58, "Specificity"=0.62)
+kable(df2, digits=2, caption = "Confusion Matrix Statistics") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
 
 
 
